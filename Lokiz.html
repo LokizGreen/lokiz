@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lokiz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=JetBrains+Mono:wght@400;600&family=Figtree:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #e9f5df; --side: #d6ebc4; --surface: #f7fcf1; --ink: #17301a;
+    --muted: #4f6b4f; --accent: #2f9e44; --accent-ink: #f7fcf1;
+    --border: #bfdcb0; --code-bg: #dcefd0; --pad: #5fb84a;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d1f12; --side: #09170d; --surface: #14301b; --ink: #dff3d2;
+      --muted: #8fb684; --accent: #6fdc5c; --accent-ink: #0d1f12;
+      --border: #24482b; --code-bg: #0a170e; --pad: #2d7a2a; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1f12; --side: #09170d; --surface: #14301b; --ink: #dff3d2;
+    --muted: #8fb684; --accent: #6fdc5c; --accent-ink: #0d1f12;
+    --border: #24482b; --code-bg: #0a170e; --pad: #2d7a2a; color-scheme: dark;
+  }
+  /* Study mode: warm amber look */
+  body.study {
+    --bg: #2a2010; --side: #1f1809; --surface: #3a2c14; --ink: #fbe9b7;
+    --muted: #c9a862; --accent: #f0b429; --accent-ink: #2a2010;
+    --border: #5c4620; --code-bg: #1a1408; --pad: #b7791f;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font-family: "Figtree", system-ui, sans-serif; background: var(--bg); color: var(--ink); overflow: hidden; }
+  button, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  /* One big lily pad, top-right */
+  .pad { position: fixed; top: -180px; right: -180px; width: 460px; fill: var(--pad); opacity: .9; pointer-events: none; z-index: 0; }
+
+  .shell { position: relative; z-index: 1; display: flex; height: 100%; }
+
+  /* Side panel */
+  aside { width: 260px; flex-shrink: 0; background: var(--side); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 16px 12px; gap: 12px; }
+  .brand { font-family: "Fraunces", Georgia, serif; font-weight: 800; font-size: 24px; letter-spacing: -0.02em; margin: 0 4px; }
+  .brand span { color: var(--accent); }
+  .btn { background: var(--accent); color: var(--accent-ink); border: none; border-radius: 10px; padding: 9px 14px; font-weight: 600; cursor: pointer; }
+  .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--border); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .side-label { font-size: 12px; color: var(--muted); margin: 6px 6px 0; }
+  .chat-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+  .chat-item { display: flex; align-items: center; gap: 6px; border-radius: 10px; padding: 4px; }
+  .chat-item.active { background: var(--surface); }
+  .chat-open { flex: 1; min-width: 0; text-align: left; background: none; border: none; padding: 8px; border-radius: 8px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-del { background: none; border: none; cursor: pointer; color: var(--muted); padding: 4px 8px; font-size: 16px; }
+  .chat-del:hover { color: #c0392b; }
+  .empty-list { font-size: 13px; color: var(--muted); padding: 6px; }
+
+  .theme-btn, .menu-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+  .menu-btn { display: none; }
+  .badge { background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; }
+
+  /* Main area */
+  main { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 16px 22px; max-width: 980px; width: 100%; margin: 0 auto; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  header .left { display: flex; gap: 10px; align-items: center; }
+  header h1 { margin: 0; font-family: "Fraunces", Georgia, serif; font-size: 20px; }
+
+  /* Chat */
+  #chatView { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  #log { flex: 1; overflow-y: auto; padding: 16px 4px; display: flex; flex-direction: column; gap: 14px; }
+  .empty { margin: auto; text-align: center; color: var(--muted); max-width: 420px; }
+  .empty h2 { font-family: "Fraunces", Georgia, serif; font-size: 26px; color: var(--ink); margin: 0 0 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; }
+  .chip { background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 14px; }
+  .msg { max-width: 92%; padding: 12px 16px; border-radius: 14px; line-height: 1.55; white-space: pre-wrap; word-wrap: break-word; }
+  .msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-ink); border-bottom-right-radius: 4px; }
+  .msg.bot { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+  .msg code { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .9em; background: var(--code-bg); padding: 1px 5px; border-radius: 5px; }
+  .msg pre { background: var(--code-bg); padding: 12px; border-radius: 10px; overflow-x: auto; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; margin: 8px 0; white-space: pre; }
+  form { display: flex; gap: 10px; padding-top: 12px; border-top: 1px solid var(--border); }
+  textarea { width: 100%; resize: vertical; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); }
+  #input { flex: 1; resize: none; min-height: 48px; max-height: 180px; padding: 12px 14px; border-radius: 14px; }
+  .hint { font-size: 12px; color: var(--muted); margin: 8px 2px 0; text-align: center; }
+
+  /* Study room */
+  #studyView { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 6px 4px 12px; }
+  .study-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .study-head h2 { margin: 0; font-family: "Fraunces", Georgia, serif; font-size: 24px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .card h3 { margin: 0; font-size: 16px; }
+  .card p { margin: 0; font-size: 14px; color: var(--muted); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .brain-svg { width: 100%; max-width: 280px; align-self: center; }
+  .stats { display: flex; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+  .stat { background: var(--side); border-radius: 10px; padding: 6px 10px; }
+  .note { font-size: 12px; color: var(--muted); }
+
+  /* Frog intro */
+  .intro { position: fixed; inset: 0; z-index: 20; background: rgba(20, 16, 6, .94); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .frog-wrap { width: min(70vw, 320px); height: min(70vw, 320px); position: relative; }
+  .frog-wrap svg { width: 100%; height: 100%; display: block; }
+  .frog-wrap.pop { animation: popIn .6s cubic-bezier(.2, 1.4, .4, 1) both; }
+  .intro.boom .frog-wrap { animation: blowUp .5s ease-in forwards; }
+  .intro .spark { position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px; border-radius: 50%; background: var(--accent); animation: fly .9s ease-out forwards; }
+  .intro .title-flash { position: absolute; color: #fbe9b7; font-family: "Fraunces", Georgia, serif; font-size: 28px; opacity: 0; animation: flash 1s ease .4s forwards; }
+  @keyframes popIn { 0% { transform: scale(0) rotate(-10deg); } 70% { transform: scale(1.08) rotate(3deg); } 100% { transform: scale(1) rotate(0); } }
+  @keyframes blowUp { to { transform: scale(2.4); opacity: 0; } }
+  @keyframes fly { to { transform: translate(var(--x), var(--y)) scale(.2); opacity: 0; } }
+  @keyframes flash { to { opacity: 1; } }
+
+  @media (max-width: 720px) {
+    aside { position: fixed; left: 0; top: 0; bottom: 0; z-index: 5; transform: translateX(-100%); transition: transform .25s ease; }
+    aside.open { transform: translateX(0); }
+    .menu-btn { display: inline-block; }
+    main { padding: 12px; }
+    .grid { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation-duration: 0.01s !important; } }
+</style>
+</head>
+<body>
+
+<svg class="pad" viewBox="0 0 200 200" aria-hidden="true">
+  <defs><symbol id="lilypad" viewBox="0 0 200 200"><path d="M100 100 L100 0 A100 100 0 1 1 30 29 Z" /></symbol></defs>
+  <use href="#lilypad"/>
+</svg>
+
+<!-- Frog intro (shown when study mode opens) -->
+<div class="intro" id="intro" hidden>
+  <div class="frog-wrap" id="frogWrap">
+    <svg viewBox="0 0 300 300" aria-hidden="true">
+      <!-- headphones -->
+      <path d="M70 120 Q70 30 150 30 Q230 30 230 120" fill="none" stroke="#222" stroke-width="12" stroke-linecap="round"/>
+      <rect x="56" y="108" width="28" height="46" rx="12" fill="#222"/>
+      <rect x="216" y="108" width="28" height="46" rx="12" fill="#222"/>
+      <!-- legs and body -->
+      <ellipse cx="60" cy="250" rx="34" ry="20" fill="#3d8a2c"/>
+      <ellipse cx="240" cy="250" rx="34" ry="20" fill="#3d8a2c"/>
+      <ellipse cx="150" cy="210" rx="95" ry="68" fill="#5fb84a"/>
+      <!-- eyes -->
+      <circle cx="105" cy="115" r="42" fill="#5fb84a"/>
+      <circle cx="195" cy="115" r="42" fill="#5fb84a"/>
+      <circle cx="105" cy="115" r="28" fill="#fff"/>
+      <circle cx="195" cy="115" r="28" fill="#fff"/>
+      <circle id="pupilL" cx="105" cy="115" r="13" fill="#111"/>
+      <circle id="pupilR" cx="195" cy="115" r="13" fill="#111"/>
+      <!-- mouth -->
+      <path d="M95 175 Q150 200 205 175" fill="none" stroke="#1b5219" stroke-width="5" stroke-linecap="round"/>
+      <!-- book -->
+      <rect x="100" y="205" width="100" height="70" rx="5" fill="#c0392b"/>
+      <rect x="104" y="209" width="92" height="62" rx="3" fill="#fbf3e4"/>
+      <line x1="150" y1="209" x2="150" y2="271" stroke="#c0392b" stroke-width="3"/>
+      <!-- arms -->
+      <ellipse cx="72" cy="235" rx="14" ry="20" fill="#5fb84a"/>
+      <ellipse cx="228" cy="235" rx="14" ry="20" fill="#5fb84a"/>
+    </svg>
+  </div>
+</div>
+
+<div class="shell">
+  <aside id="side" aria-label="Chats">
+    <h2 class="brand">Lok<span>iz</span></h2>
+    <button class="btn" id="newChat" type="button">+ New chat</button>
+    <div class="side-label">Chats</div>
+    <div class="chat-list" id="chatList"></div>
+  </aside>
+
+  <main>
+    <header>
+      <div class="left">
+        <button class="menu-btn" id="menu" type="button" aria-label="Open chats">Chats</button>
+        <h1 id="title">New chat</h1>
+        <span class="badge" id="badge" hidden>Study mode</span>
+      </div>
+      <button class="theme-btn" id="theme" type="button" aria-label="Toggle light or dark">Dark</button>
+    </header>
+
+    <!-- Normal chat -->
+    <section id="chatView">
+      <div id="log" aria-live="polite"></div>
+      <form id="form">
+        <textarea id="input" rows="1" placeholder="Ask Lokiz to write, fix, or explain code..." aria-label="Message"></textarea>
+        <button class="btn" type="submit">Send</button>
+      </form>
+      <p class="hint" id="hint">Ask a coding question. Try: "make 10 words" once Lokiz has learned some.</p>
+    </section>
+
+    <!-- Study room (owner only) -->
+    <section id="studyView" hidden>
+      <div class="study-head">
+        <h2>Study room</h2>
+        <button class="btn ghost" id="exitStudy" type="button">Exit study</button>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <h3>1. Teach the alphabet</h3>
+          <p>Type the letters a to z. Lokiz reads each one.</p>
+          <textarea id="alphaIn" rows="2" placeholder="a b c d e f g h i j k l m n o p q r s t u v w x y z"></textarea>
+          <div class="row"><button class="btn" id="readAlpha" type="button">Read letters</button></div>
+          <div class="row" id="letters"></div>
+        </div>
+
+        <div class="card">
+          <h3>2. Teach words</h3>
+          <p>Type words separated by spaces or commas. Lokiz learns the letter patterns in each word.</p>
+          <textarea id="wordIn" rows="2" placeholder="cat, dog, fish, bird, tree"></textarea>
+          <div class="row"><button class="btn" id="teachWords" type="button">Teach words</button></div>
+          <div class="row" id="words"></div>
+          <textarea id="sentIn" rows="2" placeholder="Sentences, separated by | or new lines"></textarea>
+          <div class="row"><button class="btn" id="teachSentences" type="button">Teach sentences</button></div>
+          <div class="row" id="sentences"></div>
+        </div>
+
+        <div class="card">
+          <h3>3. Make new words</h3>
+          <p>Lokiz builds new words from what it learned, then you can teach them back.</p>
+          <div class="row">
+            <button class="btn" id="make10" type="button">Make 10 words</button>
+            <button class="btn ghost" id="keepMade" type="button" disabled>Teach these to the brain</button>
+          </div>
+          <div class="row" id="made"></div>
+        </div>
+
+        <div class="card">
+          <h3>4. Teach replies</h3>
+          <p>Type what someone might say, and the reply Lokiz should give back.</p>
+          <textarea id="replyPhrase" rows="1" placeholder="When someone says: what is your name"></textarea>
+          <textarea id="replyAnswer" rows="2" placeholder="Lokiz says: I am Lokiz, a coding helper."></textarea>
+          <div class="row">
+            <button class="btn" id="teachReply" type="button">Teach reply</button>
+            <button class="btn ghost" id="forgetReplies" type="button">Forget all replies</button>
+          </div>
+          <div class="row" id="replyList"></div>
+          <textarea id="bulkReplies" rows="4" placeholder="Many at once, one per line: sentence | reply"></textarea>
+          <div class="row"><button class="btn" id="teachBulk" type="button">Teach many replies</button></div>
+        </div>
+        <div class="card">
+          <h3>Brain</h3>
+          <svg class="brain-svg" id="brainSvg" viewBox="0 0 280 200" aria-label="Brain activity"></svg>
+          <div class="stats">
+            <span class="stat" id="stLetters">Letters: 0</span>
+            <span class="stat" id="stWords">Words: 0</span>
+            <span class="stat" id="stLinks">Connections: 0</span>
+          </div>
+          <p class="note">This brain learns which letters tend to follow each other in your words. It's a simple model, the first step toward a neural network. Its knowledge is saved in this browser.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+  // ---------- Settings ----------
+  const OWNER_PASSWORD = "lokizisthegoat"; // change this to your own password
+
+  // ---------- Built-in coding answers ----------
+  const KNOWLEDGE = [
+    { keys: ["hello world", "hello", "first program"], answer: "Hello World in Python:\n\n```python\nprint(\"Hello, world!\")\n```" },
+    { keys: ["fizzbuzz", "fizz buzz"], answer: "FizzBuzz in Python:\n\n```python\nfor i in range(1, 101):\n    if i % 15 == 0:\n        print(\"FizzBuzz\")\n    elif i % 3 == 0:\n        print(\"Fizz\")\n    elif i % 5 == 0:\n        print(\"Buzz\")\n    else:\n        print(i)\n```" },
+    { keys: ["fibonacci", "fib"], answer: "Fibonacci in Python:\n\n```python\ndef fibonacci(n):\n    a, b = 0, 1\n    for _ in range(n):\n        a, b = b, a + b\n    return a\n\nprint([fibonacci(i) for i in range(10)])\n```" },
+    { keys: ["reverse", "reverse string"], answer: "Reverse a string in Python:\n\n```python\ndef reverse_string(s):\n    return s[::-1]\n```" },
+    { keys: ["sort", "bubble sort", "sorting"], answer: "Bubble sort in Python:\n\n```python\ndef bubble_sort(items):\n    items = list(items)\n    n = len(items)\n    for i in range(n):\n        for j in range(0, n - i - 1):\n            if items[j] > items[j + 1]:\n                items[j], items[j + 1] = items[j + 1], items[j]\n    return items\n```\n\nFor real code, use Python's built-in sorted()." },
+    { keys: ["html", "web page", "website"], answer: "A basic HTML page:\n\n```html\n<!DOCTYPE html>\n<html lang=\"en\">\n<head><title>My Page</title></head>\n<body><h1>Hello</h1></body>\n</html>\n```" },
+    { keys: ["loop", "for loop", "while loop"], answer: "Loops in Python:\n\n```python\nfor fruit in [\"apple\", \"banana\"]:\n    print(fruit)\n```" },
+    { keys: ["function", "def"], answer: "A function in Python:\n\n```python\ndef add(a, b):\n    return a + b\n```" },
+    { keys: ["error", "bug", "debug"], answer: "To debug an error:\n1. Read the last line of the error message.\n2. Find the line number in the traceback.\n3. Print the variables just before that line.\n4. Shrink the problem to the smallest failing example." },
+  ];
+
+  function lokizReply(text) {
+    const q = text.toLowerCase();
+    let best = null, bestScore = 0;
+    for (const item of KNOWLEDGE) {
+      let score = 0;
+      for (const k of item.keys) if (q.includes(k)) score += k.length;
+      if (score > bestScore) { best = item; bestScore = score; }
+    }
+    return best ? best.answer : "I can help with coding. Try: hello world, fizzbuzz, fibonacci, reverse a string, bubble sort, html page, loops, functions, or debugging errors.";
+  }
+
+  // ---------- Storage (per viewer; falls back safely if blocked) ----------
+  const $ = id => document.getElementById(id);
+  const safeGet = (k, fallback) => { try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch { return fallback; } };
+  const safeSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+
+  // ---------- The brain: letter-pattern model ----------
+  // Order-2 Markov chain. Context = previous two characters, value = counts of next character.
+  let brain = safeGet("lokiz-brain", { letters: [], words: [], table: {} });
+  const saveBrain = () => safeSet("lokiz-brain", brain);
+  let replies = safeGet("lokiz-replies", []);
+  const saveReplies = () => safeSet("lokiz-replies", replies);
+  let sentences = safeGet("lokiz-sentences", []);
+  const saveSentences = () => safeSet("lokiz-sentences", sentences);
+
+  function teachLetters(text) {
+    const found = (text.toLowerCase().match(/[a-z]/g) || []);
+    const before = brain.letters.length;
+    brain.letters = [...new Set([...brain.letters, ...found])].sort();
+    saveBrain();
+    return brain.letters.length - before;
+  }
+
+  function trainWord(raw) {
+    const w = raw.toLowerCase().replace(/[^a-z]/g, "");
+    if (!w || brain.words.includes(w)) return false;
+    brain.words.push(w);
+    teachLetters(w);
+    // Learn both a 2-letter and a 3-letter memory of each pattern
+    const p = "^^^" + w + "$";
+    for (let i = 0; i < p.length - 3; i++) {
+      const nx = p[i + 3];
+      for (const k of [2, 3]) {
+        const ctx = p.slice(i + 3 - k, i + 3);
+        brain.table[ctx] = brain.table[ctx] || {};
+        brain.table[ctx][nx] = (brain.table[ctx][nx] || 0) + 1;
+      }
+    }
+    return true;
+  }
+
+  // ---------- Neural network: a small character model that learns in the browser ----------
+  // Reads the last 3 letters, passes them through a hidden layer, and predicts the next letter (or the end of the word).
+  const NET_KEY = 'lokiz-net';
+  const CH_END = 26, CH_PAD = 27, CTX = 3, EMB = 12, HID = 32, OUT = 27, VOC = 28;
+  let net = null;
+  const randSmall = s => (Math.random() * 2 - 1) * s;
+  const matrix = (r, c, s) => Array.from({ length: r }, () => Array.from({ length: c }, () => randSmall(s)));
+  function newNet() {
+    return { E: matrix(VOC, EMB, 0.5), W1: matrix(HID, EMB * CTX, 0.3), b1: new Array(HID).fill(0),
+             W2: matrix(OUT, HID, 0.3), b2: new Array(OUT).fill(0), epochs: 0 };
+  }
+  function loadNet() { const saved = safeGet(NET_KEY, null); net = (saved && saved.E) ? saved : newNet(); }
+  function saveNet() { safeSet(NET_KEY, net); }
+  function netSize() { if (!net) loadNet(); return VOC * EMB + HID * EMB * CTX + HID + OUT * HID + OUT; }
+
+  function forward(ctx) {
+    const x = [];
+    for (const c of ctx) x.push(...net.E[c]);
+    const h = new Array(HID);
+    for (let j = 0; j < HID; j++) {
+      let s = net.b1[j];
+      const row = net.W1[j];
+      for (let k = 0; k < x.length; k++) s += row[k] * x[k];
+      h[j] = Math.tanh(s);
+    }
+    const z = new Array(OUT);
+    for (let o = 0; o < OUT; o++) {
+      let s = net.b2[o];
+      const row = net.W2[o];
+      for (let j = 0; j < HID; j++) s += row[j] * h[j];
+      z[o] = s;
+    }
+    const m = Math.max(...z);
+    const e = z.map(v => Math.exp(v - m));
+    const sum = e.reduce((a, b) => a + b, 0);
+    return { x, h, p: e.map(v => v / sum) };
+  }
+
+  // One step of learning (backpropagation): nudge every weight toward the right answer
+  function trainStep(ctx, target, lr) {
+    const { x, h, p } = forward(ctx);
+    const dz = p.slice();
+    dz[target] -= 1;
+    const dh = new Array(HID).fill(0);
+    for (let o = 0; o < OUT; o++) {
+      const g = dz[o], row = net.W2[o];
+      for (let j = 0; j < HID; j++) { dh[j] += row[j] * g; row[j] -= lr * g * h[j]; }
+      net.b2[o] -= lr * g;
+    }
+    const dx = new Array(x.length).fill(0);
+    for (let j = 0; j < HID; j++) {
+      const g = dh[j] * (1 - h[j] * h[j]), row = net.W1[j];
+      for (let k = 0; k < x.length; k++) { dx[k] += row[k] * g; row[k] -= lr * g * x[k]; }
+      net.b1[j] -= lr * g;
+    }
+    for (let c = 0; c < CTX; c++) {
+      const row = net.E[ctx[c]];
+      for (let d = 0; d < EMB; d++) row[d] -= lr * dx[c * EMB + d];
+    }
+    return -Math.log(p[target] + 1e-9);
+  }
+
+  // Train on every taught word for a number of passes (epochs). Returns the average loss.
+  function trainNet(epochs) {
+    if (!net) loadNet();
+    if (!brain.words.length) return 0;
+    let loss = 0;
+    for (let ep = 0; ep < epochs; ep++) {
+      loss = 0; let n = 0;
+      for (const w of brain.words.slice().sort(() => Math.random() - 0.5)) {
+        const seq = [...w].map(c => c.charCodeAt(0) - 97).concat(CH_END);
+        let ctx = [CH_PAD, CH_PAD, CH_PAD];
+        for (const t of seq) {
+          loss += trainStep(ctx, t, 0.05); n++;
+          ctx = [ctx[1], ctx[2], t];
+        }
+      }
+      loss = n ? loss / n : 0;
+    }
+    net.epochs += epochs;
+    saveNet();
+    return loss;
+  }
+
+  // Let the network write one word, one letter at a time
+  function sampleWord(allowed, seed = '') {
+    // Start from the last 3 letters of the seed word (or nothing) so replies follow the input
+    const clean = ('^^^' + seed.toLowerCase().replace(/[^a-z]/g, '')).slice(-3);
+    let ctx = [...clean].map(c => c === '^' ? CH_PAD : c.charCodeAt(0) - 97), word = '';
+    for (let step = 0; step < 10; step++) {
+      const { p } = forward(ctx);
+      const q = p.map((v, k) => (k < 26 && allowed && !allowed.has(String.fromCharCode(97 + k))) ? 0 : Math.pow(v, 1 / 0.8));
+      const total = q.reduce((a, b) => a + b, 0);
+      let r = Math.random() * total, pick = q.length - 1;
+      for (let k = 0; k < q.length; k++) { r -= q[k]; if (r <= 0) { pick = k; break; } }
+      if (pick === CH_END) return word;
+      word += String.fromCharCode(97 + pick);
+      ctx = [ctx[1], ctx[2], pick];
+    }
+    return null;
+  }
+
+  function makeWords(count) {
+    if (!net) loadNet();
+    const allowed = brain.letters.length ? new Set(brain.letters) : null;
+    const out = [];
+    for (let tries = 0; tries < 2000 && out.length < count; tries++) {
+      const w = sampleWord(allowed);
+      if (w && w.length >= 4 && w.length <= 9 && !brain.words.includes(w) && !out.includes(w)) out.push(w);
+    }
+    return out;
+  }
+
+  function makeWordsOld(count) {
+    const allowed = brain.letters.length ? new Set(brain.letters) : null;
+    const out = [];
+    for (let tries = 0; tries < 3000 && out.length < count; tries++) {
+      let word = "", ended = false;
+      while (word.length < 9) {
+        // Use the longer 3-letter memory when it exists, otherwise the 2-letter one
+        const hist = "^^^" + word;
+        const opts = brain.table[hist.slice(-3)] || brain.table[hist.slice(-2)];
+        if (!opts) break;
+        const total = Object.values(opts).reduce((a, b) => a + b, 0);
+        let r = Math.random() * total, pick = null;
+        for (const [ch, n] of Object.entries(opts)) { r -= n; if (r <= 0) { pick = ch; break; } }
+        if (pick === "$") { ended = true; break; }
+        word += pick;
+      }
+      const fits = !allowed || [...word].every(c => allowed.has(c));
+      if (ended && word.length >= 4 && word.length <= 9 && fits && !brain.words.includes(word) && !out.includes(word)) out.push(word);
+    }
+    return out;
+  }
+
+  function brainStats() {
+    const links = netSize();
+    return { letters: brain.letters.length, words: brain.words.length, links };
+  }
+
+  // ---------- Chat state ----------
+  let chats = safeGet("lokiz-chats", []);
+  let activeId = null;
+  const save = () => safeSet("lokiz-chats", chats);
+
+  const log = $("log"), form = $("form"), input = $("input"), title = $("title");
+  const chatList = $("chatList"), side = $("side"), root = document.documentElement;
+
+  const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  function render(text) {
+    return text.split(/```[^\n]*\n?/).map((part, i) =>
+      i % 2 === 1 ? `<pre>${esc(part.replace(/\n$/, ""))}</pre>`
+                  : esc(part).replace(/`([^`]+)`/g, "<code>$1</code>")
+    ).join("");
+  }
+
+  function addBubble(role, text) {
+    const div = document.createElement("div");
+    div.className = "msg " + role;
+    div.innerHTML = role === "user" ? esc(text) : render(text);
+    log.appendChild(div);
+  }
+
+  function showChat() {
+    log.innerHTML = "";
+    const chat = chats.find(c => c.id === activeId);
+    title.textContent = chat ? chat.title : "New chat";
+    if (!chat || chat.messages.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.innerHTML = "<h2>Hop in, ask Lokiz anything.</h2><p>Coding questions, scripts, and debugging.</p>";
+      const chips = document.createElement("div");
+      chips.className = "chips";
+      ["Hello world", "FizzBuzz", "Bubble sort", "Fibonacci", "HTML page"].forEach(label => {
+        const b = document.createElement("button");
+        b.className = "chip"; b.type = "button"; b.textContent = label;
+        b.onclick = () => send(label);
+        chips.appendChild(b);
+      });
+      empty.appendChild(chips);
+      log.appendChild(empty);
+    } else {
+      chat.messages.forEach(m => addBubble(m.role, m.content));
+    }
+    log.scrollTop = log.scrollHeight;
+    renderList();
+  }
+
+  function renderList() {
+    chatList.innerHTML = "";
+    if (!chats.length) {
+      const e = document.createElement("div");
+      e.className = "empty-list"; e.textContent = "No chats yet.";
+      chatList.appendChild(e);
+      return;
+    }
+    chats.forEach(c => {
+      const row = document.createElement("div");
+      row.className = "chat-item" + (c.id === activeId ? " active" : "");
+      const open = document.createElement("button");
+      open.className = "chat-open"; open.type = "button"; open.textContent = c.title;
+      open.onclick = () => { activeId = c.id; side.classList.remove("open"); setStudy(false); showChat(); };
+      const del = document.createElement("button");
+      del.className = "chat-del"; del.type = "button"; del.textContent = "×";
+      del.setAttribute("aria-label", "Delete chat");
+      del.onclick = () => {
+        chats = chats.filter(x => x.id !== c.id);
+        if (activeId === c.id) activeId = null;
+        save(); showChat();
+      };
+      row.append(open, del);
+      chatList.appendChild(row);
+    });
+  }
+
+  function post(userText, botText) {
+    if (!activeId) {
+      const c = { id: Date.now().toString(36), title: userText.slice(0, 32), messages: [] };
+      chats.unshift(c);
+      activeId = c.id;
+    }
+    const chat = chats.find(c => c.id === activeId);
+    chat.messages.push({ role: "user", content: userText });
+    if (botText) chat.messages.push({ role: "bot", content: botText });
+    save();
+    showChat();
+  }
+
+  // ---------- Study mode on/off ----------
+  let studyOn = false;
+  function setStudy(on) {
+    studyOn = on;
+    document.body.classList.toggle("study", on);
+    $("badge").hidden = !on;
+    $("chatView").hidden = on;
+    $("studyView").hidden = !on;
+    $("title").textContent = on ? "Study room" : (chats.find(c => c.id === activeId)?.title || "New chat");
+    if (on) renderStudy();
+  }
+
+  // ---------- Frog intro ----------
+  function playIntro(onDone) {
+    const intro = $("intro"), frog = $("frogWrap");
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) { onDone(); return; }
+    intro.hidden = false;
+    intro.classList.remove("boom");
+    frog.classList.remove("pop");
+    void frog.offsetWidth; // restart animation
+    frog.classList.add("pop");
+
+    setTimeout(() => {
+      intro.classList.add("boom");
+      for (let i = 0; i < 28; i++) {
+        const s = document.createElement("span");
+        s.className = "spark";
+        const a = Math.random() * Math.PI * 2, d = 150 + Math.random() * 190;
+        s.style.setProperty("--x", Math.cos(a) * d + "px");
+        s.style.setProperty("--y", Math.sin(a) * d + "px");
+        intro.appendChild(s);
+      }
+      const t = document.createElement("div");
+      t.className = "title-flash"; t.textContent = "Study mode";
+      intro.appendChild(t);
+    }, 1800);
+
+    setTimeout(() => {
+      intro.hidden = true;
+      intro.classList.remove("boom");
+      intro.querySelectorAll(".spark, .title-flash").forEach(el => el.remove());
+      onDone();
+    }, 2800);
+  }
+
+  // Frog eyes follow the pointer
+  document.addEventListener("pointermove", e => {
+    if ($("intro").hidden) return;
+    const r = $("frogWrap").getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const dx = Math.max(-10, Math.min(10, (e.clientX - cx) / 25));
+    const dy = Math.max(-10, Math.min(10, (e.clientY - cy) / 25));
+    for (const id of ["pupilL", "pupilR"]) {
+      $(id).style.transform = `translate(${dx}px, ${dy}px)`;
+    }
+  });
+
+  // ---------- Study room rendering ----------
+  function chipRow(el, items) {
+    el.innerHTML = "";
+    items.forEach(t => {
+      const s = document.createElement("span");
+      s.className = "chip"; s.textContent = t;
+      el.appendChild(s);
+    });
+  }
+
+  function renderBrain() {
+    const st = brainStats();
+    $("stLetters").textContent = "Letters: " + st.letters;
+    $("stWords").textContent = "Words: " + st.words;
+    $("stLinks").textContent = "Connections: " + st.links;
+
+    // Draw nodes: lit nodes = learned words (up to 30), linked in a ring
+    const svg = $("brainSvg");
+    const n = 30, lit = Math.min(st.words, n);
+    let markup = "";
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const x = 140 + Math.cos(a) * (90 + (i % 3) * 8);
+      const y = 100 + Math.sin(a) * (70 + (i % 2) * 8);
+      pts.push([x, y]);
+    }
+    for (let i = 0; i < lit; i++) {
+      const j = (i + 7) % n;
+      if (i < lit && j < lit) markup += `<line x1="${pts[i][0]}" y1="${pts[i][1]}" x2="${pts[j][0]}" y2="${pts[j][1]}" stroke="var(--accent)" stroke-opacity=".35"/>`;
+    }
+    pts.forEach(([x, y], i) => {
+      const on = i < lit;
+      markup += `<circle cx="${x}" cy="${y}" r="${on ? 6 : 4}" fill="${on ? "var(--accent)" : "var(--border)"}"/>`;
+    });
+    svg.innerHTML = markup;
+  }
+
+  function renderStudy() {
+    chipRow($("letters"), brain.letters);
+    chipRow($("words"), brain.words);
+    renderReplies();
+    chipRow($("sentences"), sentences);
+    renderBrain();
+  }
+
+  let madeWords = [];
+  function setMade(list) {
+    madeWords = list;
+    chipRow($("made"), list);
+    $("keepMade").disabled = list.length === 0;
+  }
+
+  // ---------- Study room events ----------
+  $("readAlpha").onclick = () => {
+    const text = $("alphaIn").value;
+    const added = teachLetters(text);
+    $("alphaIn").value = "";
+    const total = brain.letters.length;
+    alert(added ? `Lokiz read ${added} new letter${added === 1 ? "" : "s"}. It now knows ${total}.` : `Lokiz already knows these letters. It knows ${total}.`);
+    renderStudy();
+  };
+
+  $("teachWords").onclick = () => {
+    const list = $("wordIn").value.split(/[\s,|;]+/).filter(Boolean);
+    let added = 0;
+    list.forEach(w => { if (trainWord(w)) added++; });
+    trainNet(12);
+    $("wordIn").value = "";
+    alert(added ? `Lokiz learned ${added} new word${added === 1 ? "" : "s"}.` : "No new words. Lokiz already knows those, or they had no letters.");
+    renderStudy();
+  };
+
+  $("make10").onclick = () => {
+    if (brain.words.length < 3) { alert("Teach Lokiz at least 3 words first."); return; }
+    const made = makeWords(10);
+    setMade(made);
+    if (!made.length) alert("Lokiz could not make new words yet. Teach it a few more words.");
+  };
+
+  $("keepMade").onclick = () => {
+    madeWords.forEach(trainWord);
+    trainNet(12);
+    setMade([]);
+    renderStudy();
+  };
+
+  function renderReplies() {
+    chipRow($("replyList"), replies.map(r => `${r.phrase} -> ${r.answer}`));
+  }
+
+  $("teachReply").onclick = () => {
+    const phrase = $("replyPhrase").value.trim().toLowerCase();
+    const answer = $("replyAnswer").value.trim();
+    if (!phrase || !answer) { alert("Type both the phrase and the reply."); return; }
+    replies = replies.filter(r => r.phrase !== phrase).concat({ phrase, answer });
+    saveReplies();
+    $("replyPhrase").value = "";
+    $("replyAnswer").value = "";
+    renderReplies();
+  };
+
+  $("teachSentences").onclick = () => {
+    const list = $("sentIn").value.split(/\s*\|\s*|\n+|;\s*/).map(s => s.trim()).filter(Boolean);
+    let words = 0;
+    for (const s of list) {
+      if (!sentences.includes(s)) sentences.push(s);
+      for (const w of s.split(/[\s,.?!]+/)) if (trainWord(w)) words++;
+    }
+    saveSentences();
+    $("sentIn").value = "";
+    trainNet(12);
+    alert(list.length ? `Lokiz saved ${list.length} sentence${list.length === 1 ? "" : "s"} and learned ${words} new word${words === 1 ? "" : "s"}.` : "No sentences found. Separate them with | or new lines.");
+    renderStudy();
+  };
+
+  $("teachBulk").onclick = () => {
+    let added = 0;
+    for (const line of $("bulkReplies").value.split("\n")) {
+      const i = line.indexOf("|");
+      if (i < 0) continue;
+      const phrase = line.slice(0, i).trim().toLowerCase();
+      const answer = line.slice(i + 1).trim();
+      if (!phrase || !answer) continue;
+      replies = replies.filter(r => r.phrase !== phrase).concat({ phrase, answer });
+      added++;
+    }
+    saveReplies();
+    $("bulkReplies").value = "";
+    alert(added ? `Lokiz learned ${added} repl${added === 1 ? "y" : "ies"}.` : "No replies found. Use one per line: sentence | reply");
+    renderReplies();
+  };
+
+  $("forgetReplies").onclick = () => { replies = []; saveReplies(); renderReplies(); };
+
+  $("exitStudy").onclick = () => setStudy(false);
+
+  // ---------- Reading chat messages ----------
+  function codesOf(text) {
+    return [...text].filter(c => c.trim()).map(c => `${c}=${c.charCodeAt(0)}`).join(', ');
+  }
+
+  // Reads the message as character codes, then the network makes a guess from its last word
+  function netReply(text) {
+    if (!net) loadNet();
+    const read = codesOf(text.slice(0, 40));
+    if (brain.words.length < 3) return `I read: ${read}\n\nI don't know enough words yet. Ask my owner to teach me more in study mode.`;
+    const words = text.toLowerCase().match(/[a-z]+/g) || [];
+    const seed = words.length ? words[words.length - 1] : '';
+    const allowed = brain.letters.length ? new Set(brain.letters) : null;
+    const picks = [];
+    for (let tries = 0; tries < 200 && picks.length < 3; tries++) {
+      const w = sampleWord(allowed, seed);
+      if (w && w.length >= 2 && !picks.includes(w)) picks.push(w);
+    }
+    return `I read: ${read}\n\nMy guess: ${picks.join(' ') || '...'}\n\nI'm still learning, so this is a guess. Teach me in study mode if I'm wrong.`;
+  }
+
+  function smartReply(text) {
+    const q = text.toLowerCase().trim();
+    // Replies the owner taught in study mode win first (longest matching phrase)
+    const taughtHit = replies.filter(r => q.includes(r.phrase)).sort((a, b) => b.phrase.length - a.phrase.length)[0];
+    if (taughtHit) return taughtHit.answer;
+    if (/^(hi|hello|hey|yo|hiya|sup)\b/.test(q)) {
+      return `Hi! I'm Lokiz.\n\nI read: ${codesOf(text)}\n\nI'm still learning, so I may not understand you yet. Ask me a coding question, or ask me to make words.`;
+    }
+    const known = KNOWLEDGE.some(item => item.keys.some(k => q.includes(k)));
+    return known ? lokizReply(text) : netReply(text);
+  }
+
+  // ---------- Chat sending and commands ----------
+  function send(text) {
+    text = text.trim();
+    if (!text) return;
+    const cmd = text.toLowerCase();
+
+    // Owner unlock: /study print.password = ('password');
+    const unlock = text.match(/^\/study\s+print\.password\s*=\s*\(\s*['"](.+?)['"]\s*\)\s*;?$/i);
+    if (unlock) {
+      if (unlock[1] !== OWNER_PASSWORD) return post("/study ••••••", "Study mode stays off.");
+      post("/study ••••••", null);
+      playIntro(() => setStudy(true));
+      return;
+    }
+    if (cmd === "/study") return post(text, "Study mode is locked. Owner: type /study print.password = ('your password');");
+    if (cmd === "/exit") { setStudy(false); return post(text, "Back to chatting."); }
+
+    // Ask Lokiz to make words from its brain
+    if (/\b(make|generate|create)\s+(\d+\s+)?words?\b/i.test(text)) {
+      if (brain.words.length < 3) return post(text, "I need to learn more first. Ask my owner to teach me at least 3 words in study mode.");
+      const made = makeWords(10);
+      return post(text, made.length ? "Here are new words from my brain:\n" + made.join(", ") : "I could not make new words yet. I need more examples.");
+    }
+
+    post(text, smartReply(text));
+  }
+
+  form.addEventListener("submit", e => {
+    e.preventDefault();
+    const text = input.value;
+    input.value = "";
+    autoGrow();
+    send(text);
+  });
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); }
+  });
+  function autoGrow() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 180) + "px"; }
+  input.addEventListener("input", autoGrow);
+
+  $("newChat").onclick = () => { activeId = null; setStudy(false); side.classList.remove("open"); showChat(); input.focus(); };
+  $("menu").onclick = () => side.classList.toggle("open");
+
+  // ---------- Theme ----------
+  const isDark = () => {
+    const forced = root.getAttribute("data-theme");
+    return forced ? forced === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  };
+  const syncTheme = () => { $("theme").textContent = isDark() ? "Light" : "Dark"; };
+  $("theme").onclick = () => { root.setAttribute("data-theme", isDark() ? "light" : "dark"); syncTheme(); };
+  syncTheme();
+
+  // ---------- Start ----------
+  loadNet();
+  if (brain.words.length && !net.epochs) trainNet(20);
+  setStudy(false);
+  showChat();
+</script>
+</body>
+</html>
