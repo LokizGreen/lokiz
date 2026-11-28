@@ -780,11 +780,113 @@
     return known ? lokizReply(text) : netReply(text);
   }
 
+  // ---------- Coding lessons: 15 minutes, 5 steps of 3 minutes each ----------
+  const LESSON_TOTAL = 15 * 60 * 1000;
+  const DEFAULT_HINT = $("hint").textContent;
+  const LESSONS = {
+    html: [
+      { title: 'The basic page', text: `Every web page has the same shape. Create a file called index.html:\n~~~\n<!DOCTYPE html>\n<html>\n  <head>\n    <title>My Page</title>\n  </head>\n  <body>\n    <h1>Hello!</h1>\n  </body>\n</html>\n~~~` },
+      { title: 'Headings and paragraphs', text: `h1 is the biggest heading and p makes a paragraph:\n~~~\n<h2>About me</h2>\n<p>I am learning HTML.</p>\n~~~` },
+      { title: 'Links and images', text: `a makes a link and img shows a picture:\n~~~\n<a href='https://example.com'>Visit</a>\n<img src='cat.jpg' alt='A cat'>\n~~~` },
+      { title: 'Lists', text: `ul is a bullet list, ol is numbered, and li is each item:\n~~~\n<ul>\n  <li>Apples</li>\n  <li>Bread</li>\n</ul>\n~~~` },
+      { title: 'Forms and buttons', text: `Forms collect input from people:\n~~~\n<form>\n  <input type='text' placeholder='Your name'>\n  <button>Send</button>\n</form>\n~~~` },
+    ],
+    css: [
+      { title: 'Colors and selectors', text: `CSS styles HTML. A selector picks what to style:\n~~~\nh1 {\n  color: green;\n  font-family: Georgia, serif;\n}\n~~~` },
+      { title: 'Spacing', text: `padding is space inside an element, margin is space outside it:\n~~~\np {\n  padding: 16px;\n  margin: 8px 0;\n}\n~~~` },
+      { title: 'Centering with flexbox', text: `This centers everything on the page:\n~~~\nbody {\n  display: flex;\n  justify-content: center;\n  align-items: center;\n  height: 100vh;\n}\n~~~` },
+      { title: 'Hover effects', text: `Change a style when the mouse is over something:\n~~~\nbutton:hover {\n  background: darkgreen;\n}\n~~~` },
+      { title: 'Mobile friendly', text: `Change the design for small screens:\n~~~\n@media (max-width: 600px) {\n  h1 {\n    font-size: 24px;\n  }\n}\n~~~` },
+    ],
+    javascript: [
+      { title: 'Variables', text: `let stores a value that can change, and const stays the same:\n~~~\nlet score = 0;\nconst name = 'Lokiz';\nscore = score + 1;\nconsole.log(name, score);\n~~~` },
+      { title: 'Functions', text: `A function is a reusable block of code:\n~~~\nfunction add(a, b) {\n  return a + b;\n}\nconsole.log(add(2, 3));\n~~~` },
+      { title: 'Arrays and loops', text: `An array holds a list, and a loop goes through it:\n~~~\nconst fruits = ['apple', 'banana'];\nfor (const fruit of fruits) {\n  console.log(fruit);\n}\n~~~` },
+      { title: 'Clicks on a page', text: `Make a button do something when clicked:\n~~~\nconst button = document.querySelector('button');\nbutton.addEventListener('click', () => {\n  alert('You clicked!');\n});\n~~~` },
+      { title: 'Fetching data', text: `Get data from the internet:\n~~~\nasync function getData() {\n  const res = await fetch('https://api.github.com/zen');\n  console.log(await res.text());\n}\ngetData();\n~~~` },
+    ],
+    python: [
+      { title: 'Print and variables', text: `Variables store values and print shows them:\n~~~\nname = 'Lokiz'\nage = 1\nprint('Hi', name, age)\n~~~` },
+      { title: 'If statements', text: `Run code only when a condition is true:\n~~~\nscore = 7\nif score > 5:\n    print('Good job')\nelse:\n    print('Keep trying')\n~~~` },
+      { title: 'Lists and loops', text: `A for loop goes through each item in a list:\n~~~\nfruits = ['apple', 'banana']\nfor fruit in fruits:\n    print(fruit)\n~~~` },
+      { title: 'Functions', text: `def makes a function:\n~~~\ndef greet(name):\n    return 'Hello, ' + name\n\nprint(greet('Lokiz'))\n~~~` },
+      { title: 'Dictionaries', text: `A dictionary stores key and value pairs:\n~~~\nperson = {'name': 'Lokiz', 'age': 1}\nprint(person['name'])\n~~~` },
+    ],
+  };
+
+  let lesson = null; // { chatId, lang, steps, startedAt, shown, timer }
+  let teachPick = false;
+
+  function botTo(chatId, text) {
+    const chat = chats.find(c => c.id === chatId);
+    if (!chat) return;
+    chat.messages.push({ role: 'bot', content: text });
+    save();
+    if (activeId === chatId) showChat();
+  }
+
+  function youtubeLink(lang) {
+    return 'https://www.youtube.com/results?search_query=' + encodeURIComponent(lang + ' beginner tutorial');
+  }
+
+  function startLesson(lang) {
+    if (lesson) endLesson('The previous lesson was stopped.');
+    lesson = { chatId: activeId, lang, steps: LESSONS[lang], startedAt: Date.now(), shown: -1, timer: null };
+    lesson.timer = setInterval(tickLesson, 1000);
+    tickLesson();
+  }
+
+  function tickLesson() {
+    if (!lesson) return;
+    const { steps, lang } = lesson;
+    const stepMs = LESSON_TOTAL / steps.length;
+    const elapsed = Date.now() - lesson.startedAt;
+    const idx = Math.min(steps.length - 1, Math.floor(elapsed / stepMs));
+    if (idx > lesson.shown) {
+      lesson.shown = idx;
+      const s = steps[idx];
+      botTo(lesson.chatId, `Step ${idx + 1} of ${steps.length}: ${s.title}\n\n${s.text.replace(/~~~/g, '```')}`);
+    }
+    if (elapsed >= LESSON_TOTAL) {
+      return endLesson(`Lesson finished! Keep practicing ${lang}. To see more, watch videos here:\n${youtubeLink(lang)}`);
+    }
+    const left = Math.ceil((LESSON_TOTAL - elapsed) / 1000);
+    $("hint").textContent = `${lang.toUpperCase()} lesson: ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} left. Type /stop to end early.`;
+  }
+
+  function endLesson(message) {
+    if (!lesson) return;
+    clearInterval(lesson.timer);
+    botTo(lesson.chatId, message);
+    lesson = null;
+    $("hint").textContent = DEFAULT_HINT;
+  }
+
   // ---------- Chat sending and commands ----------
   function send(text) {
     text = text.trim();
     if (!text) return;
     const cmd = text.toLowerCase();
+
+    // Coding lessons
+    if (cmd === '/teach me code') {
+      teachPick = true;
+      return post(text, 'Which language do you want to learn? Type one: html, css, javascript, or python. I will teach you for 15 minutes.');
+    }
+    if (teachPick) {
+      const lang = cmd === 'js' ? 'javascript' : cmd;
+      if (LESSONS[lang]) {
+        teachPick = false;
+        post(text, `Starting a 15 minute ${lang} lesson. Type /stop to end early.`);
+        startLesson(lang);
+        return;
+      }
+      return post(text, 'Please type html, css, javascript, or python.');
+    }
+    if (cmd === '/stop' && lesson) {
+      post(text, null);
+      return endLesson('Lesson stopped. Type /teach me code to start again.');
+    }
 
     // Owner unlock: /study print.password = ('password');
     const unlock = text.match(/^\/study\s+print\.password\s*=\s*\(\s*['"](.+?)['"]\s*\)\s*;?$/i);
